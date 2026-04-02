@@ -40,7 +40,7 @@ pipeline {
             }
         }
 
-        stage('Test Frontend') {
+        stage('Test') {
             steps {
                 dir("${FRONTEND_DIR}") {
                     sh 'npm test || true'
