@@ -2,31 +2,28 @@ pipeline {
     agent any
 
     environment {
-        GIT_REPO = 'https://github.com/subasinik-blip/ultimate-devops-project-aws.git'
-        BRANCH = 'main'
+        GIT_REPO     = 'https://github.com/subasinik-blip/ultimate-devops-project-aws.git'
+        BRANCH       = 'main'
 
         /* 🔍 SONAR */
-        SONARQUBE = 'sonarqube'
+        SONARQUBE    = 'sonarqube'
 
         /* 🌐 NGINX */
-        NGINX_PATH = '/var/www/html'
+        NGINX_PATH   = '/var/www/html'
 
-        /* 📦 PATHS (adjust if needed) */
+        /* 📦 PATHS */
         FRONTEND_DIR = 'frontend'
-        BACKEND_DIR = 'backend'
-        BUILD_DIR = 'dist'
+        BUILD_DIR    = 'dist'
     }
 
     stages {
 
-        /* ========== 1️⃣ CHECKOUT ========== */
         stage('Checkout Code') {
             steps {
                 git branch: "${BRANCH}", url: "${GIT_REPO}"
             }
         }
 
-        /* ========== 2️⃣ INSTALL DEPENDENCIES ========== */
         stage('Install Dependencies') {
             steps {
                 dir("${FRONTEND_DIR}") {
@@ -35,7 +32,6 @@ pipeline {
             }
         }
 
-        /* ========== 3️⃣ BUILD ========== */
         stage('Build Frontend') {
             steps {
                 dir("${FRONTEND_DIR}") {
@@ -44,8 +40,7 @@ pipeline {
             }
         }
 
-        /* ========== 4️⃣ TEST ========== */
-        stage('Test') {
+        stage('Test Frontend') {
             steps {
                 dir("${FRONTEND_DIR}") {
                     sh 'npm test || true'
@@ -53,24 +48,22 @@ pipeline {
             }
         }
 
-        /* ========== 5️⃣ SONARQUBE ========== */
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv("${SONARQUBE}") {
-                    sh '''
-                    npm install -g sonar-scanner
-
-                    sonar-scanner \
-                      -Dsonar.projectKey=ultimate-devops \
-                      -Dsonar.sources=. \
-                      -Dsonar.host.url=$SONAR_HOST_URL \
-                      -Dsonar.login=$SONAR_AUTH_TOKEN
-                    '''
+                dir("${FRONTEND_DIR}") {
+                    withSonarQubeEnv("${SONARQUBE}") {
+                        sh """
+                            sonar-scanner \
+                                -Dsonar.projectKey=ultimate-devops \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=$SONAR_HOST_URL \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
+                        """
+                    }
                 }
             }
         }
 
-        /* ========== 6️⃣ QUALITY GATE ========== */
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
@@ -79,25 +72,23 @@ pipeline {
             }
         }
 
-        /* ========== 7️⃣ DEPLOY FRONTEND (NGINX) ========== */
         stage('Deploy to NGINX') {
             steps {
-                sh '''
-                echo "🚀 Deploying to NGINX..."
-                sudo rm -rf /var/www/html/*
-                sudo cp -r frontend/dist/* /var/www/html/
-                sudo chown -R www-data:www-data /var/www/html
-                '''
+                sh """
+                    echo "🚀 Deploying to NGINX..."
+                    sudo rm -rf ${NGINX_PATH}/*
+                    sudo cp -r ${FRONTEND_DIR}/${BUILD_DIR}/* ${NGINX_PATH}/
+                    sudo chown -R www-data:www-data ${NGINX_PATH}
+                """
             }
         }
 
-        /* ========== 8️⃣ RESTART NGINX ========== */
         stage('Restart NGINX') {
             steps {
-                sh '''
-                sudo nginx -t
-                sudo systemctl restart nginx
-                '''
+                sh """
+                    sudo nginx -t
+                    sudo systemctl restart nginx
+                """
             }
         }
     }
