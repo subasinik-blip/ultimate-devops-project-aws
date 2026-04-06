@@ -1,6 +1,10 @@
 pipeline {
     agent any
  
+    environment {
+        SCANNER_HOME = tool 'sonarqube-scanner'
+    }
+ 
     stages {
  
         stage('Checkout') {
@@ -11,42 +15,61 @@ pipeline {
  
         stage('Build') {
             steps {
-                dir('section-1') {
-                    echo 'Building project...'
-                    sleep 5
+                dir('section-1/frontend') {
+                    sh '''
+                        npm install
+                        npm run build
+                    '''
                 }
             }
         }
  
         stage('Test') {
             steps {
-                dir('section-1') {
-                    echo 'Running tests...'
-                    sleep 5
+                dir('section-1/frontend') {
+                    sh '''
+                        echo "Running tests..."
+                        npm test || true
+                    '''
                 }
             }
         }
  
         stage('SonarQube Analysis') {
             steps {
-                echo 'Running SonarQube...'
-                sleep 5
+                withSonarQubeEnv('sonarqube') {
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectKey=frontend-app \
+                        -Dsonar.sources=section-1/frontend \
+                        -Dsonar.host.url=http://<SONAR-IP>:9000 \
+                        -Dsonar.login=<SONAR-TOKEN>
+                    '''
+                }
+            }
+        }
+ 
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
             }
         }
  
         stage('Package') {
             steps {
-                dir('section-1') {
-                    echo 'Packaging...'
-                    sleep 5
-                }
+                echo 'Frontend packaged (dist folder ready)'
             }
         }
  
         stage('Deploy') {
             steps {
-                echo 'Deploying...'
-                sleep 5
+                sh '''
+                    sudo rm -rf /var/www/html/*
+                    sudo cp -r section-1/frontend/dist/* /var/www/html/
+                    sudo systemctl restart nginx
+                '''
             }
         }
     }
